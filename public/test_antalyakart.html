@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AntalyaKart API Test</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #2c3e50;
+      border-bottom: 3px solid #3498db;
+      padding-bottom: 10px;
+    }
+    .section {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-left: 4px solid #3498db;
+    }
+    .endpoint {
+      margin: 10px 0;
+      padding: 15px;
+      background: white;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    }
+    .success {
+      color: #27ae60;
+      font-weight: bold;
+    }
+    .error {
+      color: #e74c3c;
+      font-weight: bold;
+    }
+    button {
+      background: #3498db;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 5px;
+    }
+    button:hover {
+      background: #2980b9;
+    }
+    button:disabled {
+      background: #95a5a6;
+      cursor: not-allowed;
+    }
+    pre {
+      background: #2c3e50;
+      color: #ecf0f1;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+    .ws-test {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 10px 0;
+    }
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 AntalyaKart API Test</h1>
+    
+    <div class="section">
+      <h2>📋 SA64 Plaka Listesi</h2>
+      <button onclick="listSA64Plates()">Tüm Plakaları Listele</button>
+      <div id="plateListResults"></div>
+    </div>
+
+    <div class="section">
+      <h2>🚌 SA64 Hattı Araç Takibi</h2>
+      <button onclick="getSA64Vehicles()">SA64 Araçlarını Getir</button>
+      <div id="sa64VehiclesResults"></div>
+    </div>
+
+    <div class="section">
+      <h2>🔍 AntalyaKart Endpoint Keşfi</h2>
+      <button onclick="discoverEndpoints()">Endpoint'leri Keşfet</button>
+      <div id="discoverResults"></div>
+    </div>
+
+    <div class="section">
+      <h2>⏱️ Manuel Onaylanan Girişi</h2>
+      <p>AntalyaKart API erişimi olmadığı için manuel test:</p>
+      <div style="margin: 15px 0;">
+        <label>Hat: <input type="text" id="manualHat" value="SA64" style="padding: 8px; margin: 5px;"></label><br>
+        <label>Plaka: <input type="text" id="manualPlaka" value="07EM435" style="padding: 8px; margin: 5px;"></label><br>
+        <label>Zaman: <input type="time" id="manualZaman" style="padding: 8px; margin: 5px;" step="1"></label><br>
+        <button onclick="manualUpdate()">Onaylanan Güncelle</button>
+      </div>
+      <div id="manualResults"></div>
+    </div>
+
+    <div class="section">
+      <h2>REST API Test</h2>
+      <button onclick="testRestAPI()" id="restBtn">REST API'leri Test Et</button>
+      <div id="restResults"></div>
+    </div>
+
+    <div class="section">
+      <h2>WebSocket Test</h2>
+      <button onclick="testWebSocket()" id="wsBtn">WebSocket Test Et</button>
+      <div id="wsResults"></div>
+    </div>
+
+    <div class="section">
+      <h2>SA64 Hat Testi (Örnek)</h2>
+      <button onclick="testSA64()" id="sa64Btn">SA64 Hattı Takip Et</button>
+      <div id="sa64Results"></div>
+    </div>
+  </div>
+
+  <script>
+    // Sayfa yüklendiğinde şu anki zamanı set et
+    document.addEventListener('DOMContentLoaded', () => {
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0]; // HH:MM:SS
+      const timeInput = document.getElementById('manualZaman');
+      if (timeInput) timeInput.value = timeStr;
+    });
+
+    async function listSA64Plates() {
+      const results = document.getElementById('plateListResults');
+      results.innerHTML = '<div class="loading"></div> SA64 plakaları getiriliyor...';
+      
+      try {
+        const response = await fetch('/api/list-sa64-plates');
+        const data = await response.json();
+        
+        if (data.success) {
+          let html = `<h3>SA64 Tablosundaki Plakalar (${data.totalPlates} adet):</h3>`;
+          html += '<div style="background: white; padding: 15px; border-radius: 4px; max-height: 300px; overflow-y: auto;">';
+          html += '<ul style="column-count: 3; column-gap: 20px;">';
+          
+          data.plates.forEach(plate => {
+            html += `<li style="padding: 5px; font-family: monospace;">${plate}</li>`;
+          });
+          
+          html += '</ul></div>';
+          
+          results.innerHTML = html;
+        } else {
+          results.innerHTML = `<div class="error">❌ Hata: ${data.error}</div>`;
+        }
+      } catch (err) {
+        results.innerHTML = `<div class="error">❌ Hata: ${err.message}</div>`;
+      }
+    }
+
+    async function getSA64Vehicles() {
+      const results = document.getElementById('sa64VehiclesResults');
+      results.innerHTML = '<div class="loading"></div> SA64 hattı araçları getiriliyor...';
+      
+      try {
+        const response = await fetch('/api/get-sa64-vehicles');
+        const data = await response.json();
+        
+        if (data.success) {
+          let html = '<h3>SA64 Hattı Araçları:</h3>';
+          
+          if (data.vehicles && data.vehicles.length > 0) {
+            html += '<table style="width:100%; border-collapse: collapse; margin: 10px 0;">';
+            html += '<tr style="background: #3498db; color: white;">';
+            html += '<th style="padding: 8px; border: 1px solid #ddd;">Plaka</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd;">Tarife</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd;">Tarife Saati</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd;">Hareket</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd;">Onaylanan</th>';
+            html += '<th style="padding: 8px; border: 1px solid #ddd;">Durum</th>';
+            html += '</tr>';
+            
+            data.vehicles.forEach(v => {
+              html += '<tr>';
+              html += `<td style="padding: 8px; border: 1px solid #ddd;"><strong>${v.plaka}</strong></td>`;
+              html += `<td style="padding: 8px; border: 1px solid #ddd;">${v.tarife || '-'}</td>`;
+              html += `<td style="padding: 8px; border: 1px solid #ddd;">${v.tarifeSaati || '-'}</td>`;
+              html += `<td style="padding: 8px; border: 1px solid #ddd;">${v.hareket || '-'}</td>`;
+              html += `<td style="padding: 8px; border: 1px solid #ddd;">${v.onaylanan || '-'}</td>`;
+              html += `<td style="padding: 8px; border: 1px solid #ddd;">${v.durum || '-'}</td>`;
+              html += '</tr>';
+            });
+            
+            html += '</table>';
+            
+            html += `<div style="margin: 15px 0; padding: 10px; background: #e8f4f8; border-left: 4px solid #3498db;">`;
+            html += `<strong>📊 Toplam ${data.totalVehicles} araç</strong><br>`;
+            html += `Kaynak: ${data.source}`;
+            html += `</div>`;
+          }
+          
+          if (data.note) {
+            html += `<div class="ws-test"><strong>Not:</strong> ${data.note}</div>`;
+          }
+          
+          if (data.recommendation) {
+            html += `<div class="endpoint" style="background: #fff3cd;"><strong>Öneri:</strong> ${data.recommendation}</div>`;
+          }
+          
+          // API test sonuçları
+          if (data.apiResults && data.apiResults.length > 0) {
+            html += '<h4>API Test Sonuçları:</h4>';
+            data.apiResults.forEach(r => {
+              html += `<div class="endpoint">`;
+              html += `<strong>${r.endpoint}</strong><br>`;
+              if (r.status) html += `Status: ${r.status}<br>`;
+              if (r.error) html += `<span class="error">Hata: ${r.error}</span><br>`;
+              if (r.data) html += `<pre>${JSON.stringify(r.data, null, 2).slice(0, 500)}</pre>`;
+              if (r.hasVehicleKeyword) html += `✅ "vehicle" kelimesi bulundu<br>`;
+              if (r.hasSA64) html += `✅ "SA64" bulundu<br>`;
+              html += `</div>`;
+            });
+          }
+          
+          results.innerHTML = html;
+        } else {
+          results.innerHTML = `<div class="error">❌ Hata: ${data.error}</div>`;
+        }
+      } catch (err) {
+        results.innerHTML = `<div class="error">❌ Hata: ${err.message}</div>`;
+      }
+    }
+
+    async function discoverEndpoints() {
+      const results = document.getElementById('discoverResults');
+      results.innerHTML = '<div class="loading"></div> Endpoint\'ler araştırılıyor...';
+      
+      try {
+        const response = await fetch('/api/scrape-antalyakart');
+        const data = await response.json();
+        
+        let html = '<h3>Keşfedilen Endpoint\'ler:</h3>';
+        
+        if (data.discoveredEndpoints.api.length > 0) {
+          html += '<h4>API Endpoints:</h4><ul>';
+          data.discoveredEndpoints.api.forEach(url => {
+            html += `<li><code>${url}</code></li>`;
+          });
+          html += '</ul>';
+        }
+        
+        if (data.discoveredEndpoints.websocket.length > 0) {
+          html += '<h4>WebSocket Endpoints:</h4><ul>';
+          data.discoveredEndpoints.websocket.forEach(url => {
+            html += `<li><code>${url}</code></li>`;
+          });
+          html += '</ul>';
+        }
+        
+        html += '<h4>Bilinen Endpoint Test Sonuçları:</h4>';
+        data.testResults.forEach(test => {
+          const icon = test.ok ? '✅' : '❌';
+          html += `<div class="endpoint">${icon} ${test.url} - Status: ${test.status}</div>`;
+        });
+        
+        if (data.note) {
+          html += `<div class="ws-test"><strong>Not:</strong> ${data.note}</div>`;
+        }
+        
+        results.innerHTML = html;
+      } catch (err) {
+        results.innerHTML = `<div class="error">❌ Hata: ${err.message}</div>`;
+      }
+    }
+
+    async function manualUpdate() {
+      const hat = document.getElementById('manualHat').value;
+      const plaka = document.getElementById('manualPlaka').value;
+      const zaman = document.getElementById('manualZaman').value;
+      const results = document.getElementById('manualResults');
+      
+      if (!hat || !plaka || !zaman) {
+        results.innerHTML = '<div class="error">❌ Tüm alanları doldurun</div>';
+        return;
+      }
+      
+      results.innerHTML = '<div class="loading"></div> Güncelleniyor...';
+      
+      try {
+        const response = await fetch('/api/update-onaylanan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hat, plaka, onaylananZaman: zaman })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          results.innerHTML = `
+            <div class="success">
+              ✅ Başarılı! ${data.updatedCount} satır güncellendi<br>
+              Hat: ${data.hat}<br>
+              Plaka: ${data.plaka}<br>
+              Onaylanan: ${data.onaylananZaman}
+            </div>
+          `;
+        } else {
+          results.innerHTML = `<div class="error">❌ Hata: ${data.error}</div>`;
+        }
+      } catch (err) {
+        results.innerHTML = `<div class="error">❌ Hata: ${err.message}</div>`;
+      }
+    }
+
+    async function testRestAPI() {
+      const btn = document.getElementById('restBtn');
+      const results = document.getElementById('restResults');
+      
+      btn.disabled = true;
+      results.innerHTML = '<div class="loading"></div> Test ediliyor...';
+      
+      try {
+        const response = await fetch('/api/test-antalyakart');
+        const data = await response.json();
+        
+        let html = '<h3>Sonuçlar:</h3>';
+        
+        data.restAPI.forEach(item => {
+          const statusClass = item.success ? 'success' : 'error';
+          const icon = item.success ? '✅' : '❌';
+          
+          html += `
+            <div class="endpoint">
+              <div><strong>${icon} ${item.url}</strong></div>
+              <div>Status: <span class="${statusClass}">${item.status}</span></div>
+              ${item.contentType ? `<div>Content-Type: ${item.contentType}</div>` : ''}
+              ${item.dataLength ? `<div>Veri Uzunluğu: ${item.dataLength} byte</div>` : ''}
+              ${item.sampleData ? `<div>Örnek: <code>${item.sampleData}</code></div>` : ''}
+              ${item.error ? `<div class="error">Hata: ${item.error}</div>` : ''}
+            </div>
+          `;
+        });
+        
+        results.innerHTML = html;
+      } catch (err) {
+        results.innerHTML = `<div class="error">❌ Hata: ${err.message}</div>`;
+      }
+      
+      btn.disabled = false;
+    }
+
+    async function testWebSocket() {
+      const btn = document.getElementById('wsBtn');
+      const results = document.getElementById('wsResults');
+      
+      btn.disabled = true;
+      results.innerHTML = '<div class="loading"></div> WebSocket bağlantıları test ediliyor...';
+      
+      const wsUrls = [
+        'wss://realtime.antalyakart.com.tr/bus/stream',
+        'wss://realtime.antalyakart.com.tr/ws',
+        'wss://api.antalyakart.com.tr/ws/bus'
+      ];
+      
+      let html = '<h3>WebSocket Test Sonuçları:</h3>';
+      
+      for (const url of wsUrls) {
+        const result = await testSingleWS(url);
+        const icon = result.success ? '✅' : '❌';
+        const statusClass = result.success ? 'success' : 'error';
+        
+        html += `
+          <div class="endpoint">
+            <div><strong>${icon} ${url}</strong></div>
+            <div class="${statusClass}">${result.message}</div>
+            ${result.data ? `<div>Veri: <pre>${JSON.stringify(result.data, null, 2).slice(0, 500)}</pre></div>` : ''}
+          </div>
+        `;
+      }
+      
+      results.innerHTML = html;
+      btn.disabled = false;
+    }
+
+    function testSingleWS(url) {
+      return new Promise((resolve) => {
+        const ws = new WebSocket(url);
+        const timeout = setTimeout(() => {
+          ws.close();
+          resolve({ success: false, message: 'Timeout - 5 saniye içinde cevap alınamadı' });
+        }, 5000);
+        
+        ws.onopen = () => {
+          console.log('WS opened:', url);
+          // Subscribe mesajı gönder
+          try {
+            ws.send(JSON.stringify({ type: 'subscribe', channels: ['vehicles'] }));
+          } catch (e) {}
+        };
+        
+        ws.onmessage = (event) => {
+          clearTimeout(timeout);
+          let data;
+          try {
+            data = JSON.parse(event.data);
+          } catch (e) {
+            data = event.data;
+          }
+          ws.close();
+          resolve({ success: true, message: 'Bağlantı başarılı! Veri alındı.', data });
+        };
+        
+        ws.onerror = (error) => {
+          clearTimeout(timeout);
+          resolve({ success: false, message: 'Bağlantı hatası: ' + error.toString() });
+        };
+        
+        ws.onclose = (event) => {
+          if (!event.wasClean) {
+            clearTimeout(timeout);
+            resolve({ success: false, message: `Bağlantı kapandı (kod: ${event.code})` });
+          }
+        };
+      });
+    }
+
+    async function testSA64() {
+      const btn = document.getElementById('sa64Btn');
+      const results = document.getElementById('sa64Results');
+      
+      btn.disabled = true;
+      results.innerHTML = `
+        <div class="ws-test">
+          <h3>🚌 SA64 Hattı Canlı Takip</h3>
+          <p>Durak: 13001 (36.861924, 30.602911)</p>
+          <p>Hat: SA64</p>
+          <p>Takip ediliyor...</p>
+          <button onclick="stopSA64Tracking()">Durdur</button>
+          <div id="sa64Live"></div>
+        </div>
+      `;
+      
+      // WebSocket bağlantısı kur
+      const wsUrl = 'wss://realtime.antalyakart.com.tr/bus/stream';
+      window.sa64WS = new WebSocket(wsUrl);
+      
+      window.sa64WS.onopen = () => {
+        document.getElementById('sa64Live').innerHTML += '<div class="success">✅ Bağlantı kuruldu</div>';
+      };
+      
+      window.sa64WS.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          const liveDiv = document.getElementById('sa64Live');
+          liveDiv.innerHTML += `<div>${new Date().toLocaleTimeString()} - Veri: ${JSON.stringify(data).slice(0, 200)}</div>`;
+          liveDiv.scrollTop = liveDiv.scrollHeight;
+        } catch (e) {
+          console.error('Parse error:', e);
+        }
+      };
+      
+      window.sa64WS.onerror = (error) => {
+        document.getElementById('sa64Live').innerHTML += '<div class="error">❌ Bağlantı hatası</div>';
+        btn.disabled = false;
+      };
+      
+      window.sa64WS.onclose = () => {
+        document.getElementById('sa64Live').innerHTML += '<div>🔌 Bağlantı kapatıldı</div>';
+        btn.disabled = false;
+      };
+    }
+
+    function stopSA64Tracking() {
+      if (window.sa64WS) {
+        window.sa64WS.close();
+        window.sa64WS = null;
+      }
+    }
+  </script>
+</body>
+</html>

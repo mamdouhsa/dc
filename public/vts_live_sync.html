@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VTS Live Sync - SA65 Gerçek Zamanlı Takip</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: white;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .alert {
+            background: rgba(255, 59, 48, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 5px solid #ff3b30;
+        }
+        
+        .alert-success {
+            background: rgba(52, 199, 89, 0.9);
+            border-left-color: #34c759;
+        }
+        
+        .instructions {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .instructions h2 {
+            margin-bottom: 15px;
+            color: #ffd60a;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+        
+        .code-block {
+            background: #1a1a2e;
+            color: #00ff41;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+            border: 1px solid #00ff41;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .stat-label {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+        
+        .vehicles-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .vehicle-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+        }
+        
+        .vehicle-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .vehicle-plate {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #ffd60a;
+        }
+        
+        .vehicle-info {
+            margin: 10px 0;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .pulse {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #34c759;
+            animation: pulse 2s infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.1); }
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            background: #ffd60a;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 10px 5px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 214, 10, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #5e5ce6;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚌 VTS Live Sync - SA65 Gerçek Zamanlı Takip</h1>
+            <p>Kentkart VTS'den canlı veri çekme ve senkronizasyon sistemi</p>
+        </div>
+
+        <div class="instructions">
+            <h2>📋 Kullanım Talimatları</h2>
+            <ol>
+                <li><strong>Yeni sekmede</strong> <a href="https://vts.kentkart.com.tr" target="_blank" style="color: #ffd60a;">VTS'ye giriş yapın</a></li>
+                <li><strong>VTS sekmesinde</strong> F12 tuşuna basın (Console açılsın)</li>
+                <li>Aşağıdaki kodu Console'a yapıştırın ve Enter'a basın</li>
+                <li>Bu sayfaya geri dönün - her 5 saniyede otomatik güncellenecek</li>
+            </ol>
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <div class="code-block" id="scriptCode">
+// SA65 verilerini konsola yazdır ve clipboard'a kopyala
+setInterval(() => {
+  fetch('https://vts.kentkart.com.tr/api/026/v1/latestdevicedata/get?fields=bus_id,car_no,display_route_code,lat,lon,speed,status,path_name,comp_name,personel_name,personel_last_name,bearing,date_time,odometer&sort=bus_id|asc&dc=' + Date.now())
+    .then(r => r.json())
+    .then(d => {
+      const allVehicles = d.data?.data || [];
+      const sa65 = allVehicles.filter(v => 
+        v.display_route_code?.includes('SA65') || 
+        v.display_route_code?.includes('SA-65') ||
+        v.path_name?.includes('SA65') ||
+        v.path_name?.includes('SA-65')
+      );
+      
+      // Console'a yazdır
+      console.log('✅ SA65 güncellendi:', sa65.length, '/', allVehicles.length, 'araç');
+      console.table(sa65.map(v => ({
+        Plaka: v.car_no,
+        Lat: v.lat,
+        Lon: v.lon,
+        Hız: v.speed,
+        Durum: v.status === 1 ? '🟢 Aktif' : '🔴 Pasif'
+      })));
+      
+      // window.vtsData olarak sakla (iframe erişimi için)
+      window.vtsData = {
+        timestamp: new Date().toISOString(),
+        vehicles: sa65,
+        count: sa65.length,
+        total: allVehicles.length
+      };
+      
+      // Broadcast event
+      window.postMessage({type: 'VTS_UPDATE', data: window.vtsData}, '*');
+      
+    })
+    .catch(e => console.error('❌ VTS sync error:', e));
+}, 5000);
+
+// İlk çalıştırmayı hemen yap
+fetch('https://vts.kentkart.com.tr/api/026/v1/latestdevicedata/get?fields=bus_id,car_no,display_route_code,lat,lon,speed,status,path_name,comp_name,personel_name,personel_last_name,bearing,date_time,odometer&sort=bus_id|asc&dc=' + Date.now())
+  .then(r => r.json())
+  .then(d => {
+    const allVehicles = d.data?.data || [];
+    const sa65 = allVehicles.filter(v => v.display_route_code?.includes('SA65') || v.path_name?.includes('SA65'));
+    window.vtsData = {timestamp: new Date().toISOString(), vehicles: sa65, count: sa65.length, total: allVehicles.length};
+    window.postMessage({type: 'VTS_UPDATE', data: window.vtsData}, '*');
+    console.log('🟢 VTS Live Sync başlatıldı!', sa65.length, 'SA65 araç bulundu.');
+    console.log('📋 Veriyi görmek için: copy(JSON.stringify(window.vtsData))');
+  });
+        </div>
+
+        <div style="text-align: center; margin: 20px 0;">
+            <button class="btn" onclick="copyScript()">📋 Kodu Kopyala</button>
+            <button class="btn btn-secondary" onclick="openVTSIframe()">🔗 VTS'yi İframe'de Aç</button>
+            <button class="btn btn-secondary" onclick="manualPaste()">📥 Manuel Veri Yapıştır</button>
+        </div>
+
+        <div id="iframeContainer" style="display:none; margin: 20px 0;">
+            <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 10px;">
+                <strong>⚠️ Dikkat:</strong> Aşağıdaki iframe'de VTS'ye giriş yapın, ardından Console'a kodu yapıştırın.
+                <button class="btn" onclick="closeIframe()" style="float: right; padding: 5px 15px;">❌ Kapat</button>
+            </div>
+            <iframe id="vtsIframe" src="https://vts.kentkart.com.tr" style="width: 100%; height: 600px; border: 2px solid rgba(255,255,255,0.3); border-radius: 10px;"></iframe>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">Son Güncelleme</div>
+                <div class="stat-value" id="lastUpdate">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">SA65 Araç Sayısı</div>
+                <div class="stat-value" id="vehicleCount">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Aktif Araçlar</div>
+                <div class="stat-value" id="activeCount">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Senkronizasyon</div>
+                <div class="stat-value" id="syncStatus">⏸️</div>
+            </div>
+        </div>
+
+        <div id="vehiclesContainer">
+            <div class="alert">
+                ⚠️ Veri bekleniyor... Lütfen VTS Console'a yukarıdaki kodu yapıştırın.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let updateInterval = null;
+        let lastData = null;
+
+        function copyScript() {
+            const code = document.getElementById('scriptCode').textContent;
+            navigator.clipboard.writeText(code.trim()).then(() => {
+                showAlert('✅ Kod kopyalandı! Şimdi VTS Console\'a yapıştırın.', 'success');
+            });
+        }
+
+        function openVTSIframe() {
+            document.getElementById('iframeContainer').style.display = 'block';
+            showAlert('ℹ️ VTS iframe açıldı. Giriş yapıp Console\'a kodu yapıştırın.', 'success');
+        }
+
+        function closeIframe() {
+            document.getElementById('iframeContainer').style.display = 'none';
+        }
+
+        function manualPaste() {
+            const input = prompt('VTS Console\'dan "copy(JSON.stringify(window.vtsData))" komutuyla kopyalanan veriyi buraya yapıştırın:');
+            if (!input) return;
+            
+            try {
+                const data = JSON.parse(input);
+                if (data.vehicles && data.timestamp) {
+                    lastData = data;
+                    displayVehicles(data.vehicles, data.timestamp);
+                    showAlert('✅ Veri başarıyla yüklendi!', 'success');
+                } else {
+                    showAlert('❌ Geçersiz veri formatı!', 'error');
+                }
+            } catch (e) {
+                showAlert('❌ JSON parse hatası: ' + e.message, 'error');
+            }
+        }
+
+        // postMessage ile veri dinle
+        window.addEventListener('message', (event) => {
+            if (event.data?.type === 'VTS_UPDATE' && event.data?.data) {
+                lastData = event.data.data;
+                displayVehicles(lastData.vehicles, lastData.timestamp);
+                console.log('📡 VTS verisi alındı:', lastData.count, 'araç');
+            }
+        });
+
+        function showAlert(message, type = 'error') {
+            const alertDiv = document.getElementById('alertContainer');
+            const className = type === 'success' ? 'alert alert-success' : 'alert';
+            alertDiv.innerHTML = `<div class="${className}">${message}</div>`;
+            setTimeout(() => alertDiv.innerHTML = '', 5000);
+        }
+
+        function checkData() {
+            if (!lastData) {
+                showAlert('❌ Henüz veri yok! VTS Console\'da script çalıştırın veya manuel yapıştırın.', 'error');
+                return;
+            }
+
+            const updateTime = new Date(lastData.timestamp);
+            const now = new Date();
+            const diff = Math.floor((now - updateTime) / 1000);
+
+            if (diff > 30) {
+                showAlert(`⚠️ Son güncelleme ${diff} saniye önce. VTS script çalışıyor mu?`, 'error');
+            } else {
+                showAlert(`✅ Veri güncel! ${lastData.count} araç bulundu. (${diff}sn önce)`, 'success');
+            }
+
+            displayVehicles(lastData.vehicles, lastData.timestamp);
+        }
+
+        function displayVehicles(vehicles, timestamp) {
+            if (!vehicles || vehicles.length === 0) {
+                document.getElementById('vehiclesContainer').innerHTML = `
+                    <div class="alert">⚠️ SA65 hattında araç bulunamadı.</div>
+                `;
+                return;
+            }
+
+            const activeVehicles = vehicles.filter(v => v.status === 1);
+            
+            document.getElementById('vehicleCount').textContent = vehicles.length;
+            document.getElementById('activeCount').textContent = activeVehicles.length;
+            document.getElementById('lastUpdate').textContent = new Date(timestamp).toLocaleTimeString('tr-TR');
+            document.getElementById('syncStatus').innerHTML = '<span class="pulse"></span>LIVE';
+
+            const html = `
+                <div class="vehicles-grid">
+                    ${vehicles.map(v => `
+                        <div class="vehicle-card">
+                            <div class="vehicle-plate">
+                                ${v.status === 1 ? '🟢' : '🔴'} ${v.car_no || 'Bilinmiyor'}
+                            </div>
+                            <div class="vehicle-info">
+                                <div class="info-row">
+                                    <span>🚏 Hat:</span>
+                                    <span><strong>${v.display_route_code || '-'}</strong></span>
+                                </div>
+                                <div class="info-row">
+                                    <span>📍 Rota:</span>
+                                    <span>${v.path_name || '-'}</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>📍 Konum:</span>
+                                    <span>${v.lat ? `${v.lat.toFixed(6)}, ${v.lon.toFixed(6)}` : 'Yok'}</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>⚡ Hız:</span>
+                                    <span><strong>${v.speed || 0} km/h</strong></span>
+                                </div>
+                                <div class="info-row">
+                                    <span>🧭 Yön:</span>
+                                    <span>${v.bearing || 0}°</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>📏 KM:</span>
+                                    <span>${v.odometer ? (v.odometer / 1000).toFixed(1) + ' km' : '-'}</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>👨‍✈️ Sürücü:</span>
+                                    <span>${v.personel_name || ''} ${v.personel_last_name || '-'}</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>🏢 Şirket:</span>
+                                    <span>${v.comp_name || '-'}</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>🕐 Veri Zamanı:</span>
+                                    <span>${v.date_time ? new Date(v.date_time).toLocaleTimeString('tr-TR') : '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            document.getElementById('vehiclesContainer').innerHTML = html;
+        }
+
+        // Her 2 saniyede bir son veriyi kontrol et
+        function startAutoUpdate() {
+            if (updateInterval) clearInterval(updateInterval);
+            
+            updateInterval = setInterval(() => {
+                if (lastData) {
+                    const updateTime = new Date(lastData.timestamp);
+                    const now = new Date();
+                    const diff = Math.floor((now - updateTime) / 1000);
+                    
+                    // 10 saniyeden eski değilse göster
+                    if (diff < 10) {
+                        displayVehicles(lastData.vehicles, lastData.timestamp);
+                    }
+                }
+            }, 2000);
+        }
+
+        // Sayfa yüklendiğinde başlat
+        window.addEventListener('load', () => {
+            startAutoUpdate();
+            showAlert('ℹ️ VTS Console\'da script çalıştırın veya "VTS\'yi İframe\'de Aç" butonuna tıklayın.', 'success');
+        });
+
+        // Sayfa kapanınca temizle
+        window.addEventListener('beforeunload', () => {
+            if (updateInterval) clearInterval(updateInterval);
+        });
+    </script>
+</body>
+</html>

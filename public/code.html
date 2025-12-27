@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Otobüs Hareket Saati Yönetimi</title>
+<link rel="stylesheet" href="/style.css">
+<script>
+  // Supabase Configuration
+  window.SUPABASE_URL = 'https://vhxjyfappvmtwfdkhkoc.supabase.co';
+  window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoeGp5ZmFwcHZtdHdmZGtoa29jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI1NDI5MjcsImV4cCI6MjA0ODExODkyN30.7wZxT8_L7cN0jCKE9qQvXmJq4qMDqHqYzKqy5qbQZAc';
+  window.SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoeGp5ZmFwcHZtdHdmZGtoa29jIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMjU0MjkyNywiZXhwIjoyMDQ4MTE4OTI3fQ.VWnKC7B_5oqKhthYCVzMoHuSUxYmH9O6A3xjcwwm7NQ';
+  
+  // Sayfa yüklendiğinde session kontrolü yap
+  (function() {
+    const userSession = localStorage.getItem('userSession');
+    
+    if (!userSession) {
+      // Session yoksa login'e yönlendir
+      window.location.href = '/login';
+      return;
+    }
+    
+    try {
+      const session = JSON.parse(userSession);
+      const loginTime = new Date(session.loginTime);
+      const now = new Date();
+      const hoursPassed = (now - loginTime) / (1000 * 60 * 60);
+      
+      // 24 saat geçtiyse session'ı temizle ve login'e yönlendir
+      if (hoursPassed > 24) {
+        localStorage.removeItem('userSession');
+        window.location.href = '/login';
+        return;
+      }
+      
+      console.log('✅ Kullanıcı oturum açık:', session.username, '- Görev:', session.gorev);
+      
+      // Sayfa yüklendikten sonra kullanıcı bilgilerini göster ve Admin kontrolü yap
+      window.addEventListener('DOMContentLoaded', function() {
+        // Kullanıcı bilgilerini göster
+        const currentUserSpan = document.getElementById('currentUser');
+        const currentGorevSpan = document.getElementById('currentGorev');
+        if (currentUserSpan) currentUserSpan.textContent = '👤 ' + session.username;
+        if (currentGorevSpan) currentGorevSpan.textContent = session.gorev;
+        
+        // Buton kontrollerini görev bazlı yap
+        const uploadBtn = document.getElementById('uploadBtn');
+        const methodManualBtn = document.getElementById('methodManualBtn');
+        const methodAutoBtn = document.getElementById('methodAutoBtn');
+        const uploadTypeHatBtn = document.getElementById('uploadTypeHatBtn');
+        const uploadTypePlakaBtn = document.getElementById('uploadTypePlakaBtn');
+        const uploadTypeDepolamaBtn = document.getElementById('uploadTypeDepolamaBtn');
+        
+        // Tüm butonları devre dışı bırak fonksiyonu
+        function disableButton(btn, title) {
+          if (btn) {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+            btn.title = title || 'Bu işlem için yetkiniz yok';
+          }
+        }
+        
+        // Tüm butonları aktif et fonksiyonu
+        function enableButton(btn, title) {
+          if (btn) {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+            btn.title = title || '';
+          }
+        }
+        
+        // Görev bazlı buton kontrolleri
+        const gorev = session.gorev;
+        
+        if (gorev === 'Rotasyon') {
+          // Rotasyon: Tüm butonlar aktif
+          enableButton(uploadBtn);
+          enableButton(methodManualBtn);
+          enableButton(methodAutoBtn);
+          enableButton(uploadTypeHatBtn);
+          enableButton(uploadTypePlakaBtn);
+          enableButton(uploadTypeDepolamaBtn);
+          
+        } else if (gorev === 'Operasyon') {
+          // Operasyon: Upload, Manuel, Plaka aktif - Auto, Hat, Depolama pasif
+          enableButton(uploadBtn);
+          enableButton(methodManualBtn);
+          enableButton(uploadTypePlakaBtn);
+          disableButton(methodAutoBtn, 'Operasyon yetkisi ile otomatik listeleme yapamazsınız');
+          disableButton(uploadTypeHatBtn, 'Operasyon yetkisi ile hat yükleyemezsiniz');
+          disableButton(uploadTypeDepolamaBtn, 'Operasyon yetkisi ile depolama yükleyemezsiniz');
+          
+        } else if (gorev === 'Depolama') {
+          // Depolama: Sadece Upload pasif
+          disableButton(uploadBtn, 'Depolama yetkisi ile yükleme yapamazsınız');
+          enableButton(methodManualBtn);
+          enableButton(methodAutoBtn);
+          enableButton(uploadTypeHatBtn);
+          enableButton(uploadTypePlakaBtn);
+          enableButton(uploadTypeDepolamaBtn);
+          
+        } else if (gorev === 'User') {
+          // User: Sadece Upload pasif
+          disableButton(uploadBtn, 'User yetkisi ile yükleme yapamazsınız');
+          enableButton(methodManualBtn);
+          enableButton(methodAutoBtn);
+          enableButton(uploadTypeHatBtn);
+          enableButton(uploadTypePlakaBtn);
+          enableButton(uploadTypeDepolamaBtn);
+          
+        } else if (gorev === 'Admin') {
+          // Admin: Tüm butonlar aktif
+          enableButton(uploadBtn);
+          enableButton(methodManualBtn);
+          enableButton(methodAutoBtn);
+          enableButton(uploadTypeHatBtn);
+          enableButton(uploadTypePlakaBtn);
+          enableButton(uploadTypeDepolamaBtn);
+        }
+        
+        // Açıklama Ekle butonu - Sadece Operasyon ve Depolama için
+        const aciklamaBtn = document.getElementById('aciklamaBtn');
+        if (aciklamaBtn && (session.gorev === 'Operasyon' || session.gorev === 'Depolama')) {
+          aciklamaBtn.style.display = 'block';
+        }
+        
+        // Admin kontrolü - Buton metnini ve işlevini değiştir
+        const addUserBtn = document.getElementById('addUserBtn');
+        if (addUserBtn) {
+          if (session.gorev === 'Admin') {
+            // Admin için "Kullanıcı Ekle" butonu
+            addUserBtn.innerHTML = '➕ Kullanıcı Ekle';
+            addUserBtn.onclick = null; // app.js'deki event listener kullanılacak
+          } else {
+            // Admin değil için "Şifre Değiştir" butonu
+            addUserBtn.innerHTML = '🔑 Şifre Değiştir';
+            addUserBtn.style.background = '#e67e22'; // Turuncu renk
+            addUserBtn.disabled = false;
+            addUserBtn.style.opacity = '1';
+            addUserBtn.style.cursor = 'pointer';
+            addUserBtn.title = 'Şifrenizi değiştirin';
+            // Şifre değiştirme modalını aç
+            addUserBtn.onclick = function() {
+              window.openChangePasswordModal && window.openChangePasswordModal();
+            };
+          }
+        }
+      });
+    } catch (err) {
+      // Session bozuksa temizle ve login'e yönlendir
+      localStorage.removeItem('userSession');
+      window.location.href = '/login';
+    }
+  })();
+  
+  // Şifre göster/gizle fonksiyonu
+  function togglePasswordVisibility(inputId, eyeIcon) {
+    const input = document.getElementById(inputId);
+    if (input.type === 'password') {
+      input.type = 'text';
+      eyeIcon.textContent = '🙈';
+    } else {
+      input.type = 'password';
+      eyeIcon.textContent = '👁️';
+    }
+  }
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+    <h1>📊 Otobüs Kontrol Sistemi</h1>
+    <div class="sub">Google Drive'dan veri yükle ve yönet</div>
+    <div id="userInfo" style="font-size: 13px; margin-top: 8px; color: #7f8c8d;">
+      <span id="currentUser" style="font-weight: bold;"></span>
+      <span id="currentGorev" style="margin-left: 10px; padding: 2px 8px; background: #ecf0f1; border-radius: 4px; font-size: 11px;"></span>
+    </div>
+    </div>
+    
+    <!-- Mode Switch - HIDDEN: Mode is now controlled by user's Görev -->
+    <div class="mode-switch-container" style="display: none;">
+      <label class="mode-switch-label">Depolama</label>
+      <label class="mode-switch">
+        <input type="checkbox" id="modeSwitch">
+        <span class="mode-slider"></span>
+      </label>
+      <label class="mode-switch-label">Operasyon</label>
+    </div>
+    
+    <div class="controls" style="display: flex; flex-wrap: wrap; gap: 10px;">
+    <button id="uploadBtn" class="btn btn-upload">📤 Yükle</button>
+    <button id="refreshBtn" class="btn">🔄 Yenile</button>
+    <button id="addUserBtn" class="btn" style="background: #27ae60;">➕ Kullanıcı Ekle</button>
+    <button id="logoutBtn" class="btn" style="background: #e74c3c;">🚺 Çıkış</button>
+    </div>
+  </header>
+
+  <!-- Timer -->
+  <div id="timerContainer" class="timer-container" style="display: none;">
+    <div class="timer-card">
+      <div class="timer-header">
+        <h3>⏱️ Sonraki Otobüs</h3>
+        <label style="font-size: 12px; font-weight: normal; margin-right: auto; margin-left: 10px;">
+          <input type="checkbox" id="dynamicTrackingCheckbox" style="margin-right: 5px;">
+          Dinamik Takip
+        </label>
+        <button id="closeTimerBtn" class="close-timer-btn" onclick="window.handleCloseTimer(event)">×</button>
+      </div>
+      <div class="timer-content">
+        <div id="timerMultipleBusList" class="timer-multiple-buses" style="display: none;">
+          <!-- Dinamik olarak doldurulacak -->
+        </div>
+        
+        <!-- Tek araç bilgisi (varsayılan) -->
+        <div id="timerSingleBusInfo" class="bus-info">
+          <div class="info-row">
+            <span class="label">Hat Adı:</span>
+            <span id="timerHatAdi" class="value">-</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Plaka:</span>
+            <span id="timerPlaka" class="value">-</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Tarife:</span>
+            <span id="timerTarife" class="value">-</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Hareket:</span>
+            <span id="timerHareket" class="value">-</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Durum:</span>
+            <span id="timerDurum" class="value">-</span>
+          </div>
+        </div>
+        <div class="countdown">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 20px;">
+            <div style="text-align: center;">
+              <div style="font-size: 10px; color: #95a5a6; margin-bottom: 4px;">Önceki Saat</div>
+              <div id="timerPrevTime" style="font-size: 16px; color: #7f8c8d; font-weight: 500;">--:--</div>
+            </div>
+            <div id="timerDisplay" class="timer-display">00:00</div>
+            <div style="text-align: center;">
+              <div style="font-size: 10px; color: #95a5a6; margin-bottom: 4px;">Sonraki Saat</div>
+              <div id="timerNextTime" style="font-size: 16px; color: #7f8c8d; font-weight: 500;">--:--</div>
+            </div>
+          </div>
+          <div class="timer-label">Kalan Süre</div>
+          <div id="timerCurrentHatName" style="font-size: 16px; color: #2c3e50; margin-top: 6px; font-weight: 600;">-</div>
+        </div>
+      </div>
+      <div style="padding: 10px 20px; border-top: 1px solid #e0e0e0;">
+        <label style="font-size: 12px; font-weight: normal; display: flex; align-items: center; cursor: pointer; margin-bottom: 8px;">
+          <input type="checkbox" id="arizaliFilterCheckbox" style="margin-right: 6px; cursor: pointer;">
+          <span>Sadece Arızalı Araçları Göster</span>
+        </label>
+        <label style="font-size: 12px; font-weight: normal; display: flex; align-items: center; cursor: pointer; margin-bottom: 8px;">
+          <input type="checkbox" id="degişenFilterCheckbox" style="margin-right: 6px; cursor: pointer;">
+          <span>Değişen Araçları Göster</span>
+        </label>
+        <label style="font-size: 12px; font-weight: normal; display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="bosDoluCheckbox" style="margin-right: 6px; cursor: pointer;">
+          <span>Boş/Dolu</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Boş/Dolu Popup -->
+  <div id="bosDoluContainer" class="timer-container" style="display: none;">
+    <div class="timer-card">
+      <div class="timer-header">
+        <h3>🚌 Boş-Dolu Araçlar</h3>
+        <button id="closeBosDoluBtn" class="close-timer-btn">×</button>
+      </div>
+      <div class="timer-content" style="max-height: 500px; overflow-y: auto;">
+        <div id="bosDoluList" style="padding: 10px;">
+          <!-- Dinamik olarak doldurulacak -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Approval Confirmation Modal -->
+  <div id="approvalModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2 id="approvalModalTitle">🚌 Çıkış Onayı</h2>
+        <button id="closeApprovalModal" class="close-btn">×</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+          <div style="margin-bottom: 10px;">
+            <strong>Hat:</strong> <span id="approvalHat" style="color: #2c3e50;">-</span>
+          </div>
+          <div style="margin-bottom: 10px;">
+            <strong>Çalışma Zamanı:</strong> <span id="approvalCalismaZamani" style="color: #2c3e50;">-</span>
+          </div>
+          <div style="margin-bottom: 10px;">
+            <strong>Tarife:</strong> <span id="approvalTarife" style="color: #2c3e50;">-</span>
+          </div>
+          <div style="margin-bottom: 10px;">
+            <strong>Çıkış Saati:</strong> <span id="approvalTime" style="color: #e74c3c; font-weight: bold;">-</span>
+          </div>
+          <div>
+            <strong>Plaka:</strong> <span id="approvalPlaka" style="color: #2c3e50;">-</span>
+          </div>
+        </div>
+        <p id="approvalQuestion" style="text-align: center; color: #7f8c8d; font-size: 14px;">
+          Bu çıkışı onaylamak istiyor musunuz?
+        </p>
+        
+        <!-- Açıklama Giriş Formu (Gizli) -->
+        <div id="aciklamaFormInline" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 2px solid #e0e0e0;">
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">📝 Açıklama *</label>
+            <textarea id="aciklamaTextInline" placeholder="Açıklama yazın..." style="width: 100%; min-height: 120px; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; resize: vertical; font-family: Arial, sans-serif; transition: border-color 0.3s;" onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e0e0e0'"></textarea>
+          </div>
+          <div id="aciklamaStatusInline" style="display: none; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px;"></div>
+          <button id="confirmAciklamaInline" class="btn" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer;">✅ Açıklama Ekle</button>
+        </div>
+
+        <!-- Araç Değiştir Formu (Gizli) -->
+        <div id="aracDegistirFormInline" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 2px solid #e0e0e0;">
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">🚗 Yeni Plaka *</label>
+            <input type="text" id="yeniPlakaInput" placeholder="Yeni plaka giriniz..." style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; font-family: Arial, sans-serif; transition: border-color 0.3s;" onfocus="this.style.borderColor='#e67e22'" onblur="this.style.borderColor='#e0e0e0'" />
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">📝 Açıklama (Zorunlu) *</label>
+            <textarea id="aracDegistirAciklama" placeholder="Araç değiştirme sebebini açıklayın..." style="width: 100%; min-height: 100px; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; resize: vertical; font-family: Arial, sans-serif; transition: border-color 0.3s;" onfocus="this.style.borderColor='#e67e22'" onblur="this.style.borderColor='#e0e0e0'"></textarea>
+          </div>
+          <div id="aracDegistirStatus" style="display: none; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px;"></div>
+          <button id="confirmAracDegistir" class="btn" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #e67e22 0%, #d35400 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer;">🚗 Araç Değiştir</button>
+        </div>
+        <!-- Arızalı İşaretleme İçin Açıklama Formu (Gizli) -->
+        <div id="arizaliAciklamaForm" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 2px solid #e0e0e0;">
+          <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">📝 Arıza Açıklaması (Zorunlu) *</label>
+            <textarea id="arizaliAciklamaText" placeholder="Arıza detaylarını açıklayın..." style="width: 100%; min-height: 100px; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; resize: vertical; font-family: Arial, sans-serif; transition: border-color 0.3s;" onfocus="this.style.borderColor='#e74c3c'" onblur="this.style.borderColor='#e0e0e0'"></textarea>
+          </div>
+          <div id="arizaliAciklamaStatus" style="display: none; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px;"></div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end;">
+        <button id="cancelApprovalBtn" class="btn btn-secondary" style="flex: 1 1 auto; min-width: 100px;">İptal</button>
+        <button id="confirmApprovalBtn" class="btn" style="background: #27ae60; flex: 1 1 auto; min-width: 120px;">✅ Onayla</button>
+        <button id="aciklamaEkleFromPopup" class="btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: none; flex: 1 1 auto; min-width: 140px;">📝 Açıklama Ekle</button>
+        <button id="aracDegistirFromPopup" class="btn" style="background: linear-gradient(135deg, #e67e22 0%, #d35400 100%); display: none; flex: 1 1 auto; min-width: 140px;">🚗 Araç Değiştir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Açıklama İnceleme Modal -->
+  <div id="aciklamaInceleModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 900px; width: 90%;">
+      <div class="modal-header">
+        <h2 id="aciklamaInceleTitle">📝 Açıklamaları İncele</h2>
+        <button id="closeAciklamaInceleModal" class="close-btn">×</button>
+      </div>
+      <div class="modal-body">
+        <!-- Görev Seçimi (Sadece Admin ve diğerleri için görünür) -->
+        <div id="gorevSelectionDiv" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50;">📋 Hangi açıklamaları görmek istersiniz?</label>
+          <select id="gorevSelectCombo" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px;">
+            <option value="">-- Seçiniz --</option>
+            <option value="Operasyon">Operasyon Açıklamaları</option>
+            <option value="Depolama">Depolama Açıklamaları</option>
+          </select>
+        </div>
+        
+        <div id="aciklamaInceleStatus" class="info" style="display: none; margin-bottom: 15px;"></div>
+        
+        <!-- Tablo -->
+        <div style="overflow-x: auto; max-height: 500px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <table id="aciklamaTable" style="width: 100%; border-collapse: collapse;">
+            <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 1;">
+              <tr id="aciklamaTableHead">
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e0e0e0;">Tarih</th>
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e0e0e0;">Hat Adı</th>
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e0e0e0;">Çalışma Zamanı</th>
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e0e0e0;">Tarife</th>
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e0e0e0;">Tarife Saati</th>
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e0e0e0;">Plaka</th>
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e0e0e0; min-width: 200px;">Açıklama</th>
+              </tr>
+            </thead>
+            <tbody id="aciklamaTableBody">
+              <tr>
+                <td colspan="7" style="padding: 30px; text-align: center; color: #7f8c8d;">Veri yüklenecek...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="closeAciklamaInceleBtn" class="btn btn-secondary">İptal</button>
+        <button id="sistemiGuncelleBtn" class="btn" style="background: #e67e22; display: none;">📧 Sistemi Güncelle ve Mail Gönder</button>
+        <button id="exportAciklamaExcel" class="btn" style="background: #27ae60;">📄 Excel Olarak İndir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Satır Açıklama Mesajları Popup -->
+  <div id="rowAciklamaModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 700px; width: 90%;">
+      <div class="modal-header">
+        <h2>💬 Açıklama Mesajları</h2>
+        <button id="closeRowAciklamaModal" class="close-btn">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="rowAciklamaInfo" style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+          <strong>Satır Bilgileri:</strong>
+          <div id="rowAciklamaDetails" style="margin-top: 5px; font-size: 14px; color: #555;"></div>
+        </div>
+        
+        <div style="overflow-x: auto; max-height: 400px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 1;">
+              <tr>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e0e0e0;">Tarih</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e0e0e0;">Kaynak</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e0e0e0;">Açıklama</th>
+              </tr>
+            </thead>
+            <tbody id="rowAciklamaTableBody">
+              <tr><td colspan="3" style="padding: 20px; text-align: center; color: #999;">Yükleniyor...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="closeRowAciklamaBtn" class="btn btn-secondary">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upload Modal -->
+  <div id="uploadModal" class="modal" style="display: none;">
+    <div class="modal-content">
+    <div class="modal-header">
+    <h2>Google Drive'dan Yükle</h2>
+    <button id="closeModal" class="close-btn">×</button>
+    </div>
+    <div class="modal-body">
+    
+    <!-- Step 1: Method -->
+    <div id="step1" class="step">
+    <div class="form-group">
+    <label>Yükleme Yöntemi Seçin:</label>
+    <div style="display: flex; gap: 10px; margin-top: 12px;">
+    <button id="methodAutoBtn" class="btn" style="flex: 1;">🔄 Otomatik Listele</button>
+    <button id="methodManualBtn" class="btn" style="flex: 1;">📁 Manuel Dosya</button>
+    </div>
+    </div>
+    <div id="methodStatus" class="info" style="display: none;"></div>
+    </div>
+
+    <!-- Step 2 Auto -->
+    <div id="step2Auto" class="step" style="display: none;">
+    <div class="form-group">
+    <label>Paylaşılan Klasördeki Dosyalar</label>
+    <p style="font-size: 12px; color: #7f8c8d; margin-bottom: 12px;">
+    🔗 Klasör: <code>10GaVA2Pe7v0AC8bv94UPgonDZVe4UdgV</code>
+    </p>
+    <button id="listFilesBtn" class="btn">📂 Dosyaları Listele</button>
+    </div>
+    <div id="listStatus" class="info" style="display: none;"></div>
+    </div>
+
+    <!-- Step 2 Manual -->
+    <div id="step2Manual" class="step" style="display: none;">
+    <div class="form-group">
+    <label>Yükleme Tipi Seçin:</label>
+    <div style="display: flex; gap: 10px; margin-top: 12px; margin-bottom: 20px;">
+    <button id="uploadTypeHatBtn" class="btn" style="flex: 1;">🚌 Hat Yükle</button>
+    <button id="uploadTypePlakaBtn" class="btn" style="flex: 1;">🚗 Plaka Yükle</button>
+    <button id="uploadTypeDepolamaBtn" class="btn" style="flex: 1;">🏠 Depolama Yükle</button>
+    </div>
+    </div>
+    <div class="form-group" id="manualFileInputGroup" style="display: none;">
+    <label id="manualFileLabel">Excel Dosyası Seçin:</label>
+    <input type="file" id="manualFileInput" accept=".xlsx,.xls" class="input-field" />
+    <p id="manualFileHint" style="font-size: 12px; color: #7f8c8d; margin-top: 8px;"></p>
+    </div>
+    <div id="manualStatus" class="info" style="display: none;"></div>
+    </div>
+
+    <!-- Step 3: File List -->
+    <div id="step3" class="step" style="display: none;">
+    <div class="form-group">
+    <label>Dosyaları Seçin:</label>
+    
+    <!-- Search Box -->
+    <input type="text" id="fileSearchInput" class="input-field" placeholder="🔍 Dosya ara..." style="margin-bottom: 10px;" />
+    
+    <!-- Select All -->
+    <label class="file-checkbox" style="margin-bottom: 10px; font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 8px;">
+      <input type="checkbox" id="selectAllCheckbox" />
+      Tümünü Seç
+    </label>
+    
+    <div id="filesList" class="files-list"></div>
+    </div>
+    <div id="selectStatus" class="info" style="display: none;"></div>
+    </div>
+
+    <!-- Upload Progress -->
+    <div id="uploadProgressContainer" style="display: none; margin-top: 15px;">
+      <div style="margin-bottom: 8px; font-size: 14px; color: #666;">
+        <span id="uploadProgressText">0 / 0 dosya yüklendi</span>
+        <span id="uploadProgressPercent" style="float: right; font-weight: bold;">0%</span>
+      </div>
+      <div style="width: 100%; background: #f0f0f0; border-radius: 10px; overflow: hidden; height: 24px;">
+        <div id="uploadProgressBar" style="width: 0%; background: linear-gradient(90deg, #4CAF50, #45a049); height: 100%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold;"></div>
+      </div>
+      <div id="uploadCurrentFile" style="margin-top: 8px; font-size: 13px; color: #555; font-style: italic;"></div>
+    </div>
+
+    <div id="uploadStatus" class="info" style="display: none;"></div>
+    </div>
+    <div class="modal-footer">
+    <button id="cancelBtn" class="btn btn-secondary">İptal</button>
+    <button id="confirmUploadBtn" class="btn" style="display: none;">Yükle</button>
+    </div>
+    </div>
+  </div>
+
+  <div id="mainCard" class="card">
+    
+    <!-- Hat Selection - Tablo seçimi kaldırıldı -->
+    <div id="tableSelection" style="display: none; margin-bottom: 20px;">
+    
+    <!-- Depolama Filtreleme -->
+    <div class="form-group" style="margin-bottom: 20px;">
+      <label>🏠 Depolama Filtresi:</label>
+      <div style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px; background: #f9f9f9;">
+        <label style="display: block; margin-bottom: 8px; font-weight: bold;">
+          <input type="checkbox" id="selectAllDepolama" style="margin-right: 8px;">
+          Tümünü Seç
+        </label>
+        <div id="depolamaCheckboxList"></div>
+      </div>
+      <button id="applyDepolamaFilter" class="btn" style="margin-top: 10px; width: 100%;">🔍 Filtre Uygula</button>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
+      <!-- Tablo seçimi kaldırıldı -->
+      
+      <div class="form-group">
+      <label for="hareketSelect">Hareket Filtresi:</label>
+      <select id="hareketSelect" class="input-field">
+      <option value="">Tümü</option>
+      <option value="Kalkış">Kalkış</option>
+      <option value="Dönüş">Dönüş</option>
+      </select>
+      </div>
+    </div>
+    
+    <!-- Çoklu Hat Seçimi -->
+    <div id="hatSelectionContainer" class="form-group" style="display: none; margin-top: 15px;">
+      <label>🚌 Hat Seçimi (Timer Takibi):</label>
+      <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px; background: #f9f9f9;">
+        <label style="display: block; margin-bottom: 8px; font-weight: bold;">
+          <input type="checkbox" id="selectAllHats" style="margin-right: 8px;">
+          Tümünü Seç
+        </label>
+        <div id="hatCheckboxList"></div>
+      </div>
+      
+      <!-- Set Time Section -->
+      <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 4px;">
+        <label style="margin: 0; font-weight: bold;">⏰ Uyarı Zamanı:</label>
+        <input type="text" id="dangerTimeInput" value="00:00" placeholder="35:00" pattern="[0-5]?[0-9]:[0-5][0-9]" maxlength="5" title="Dakika:Saniye (örn: 35:00 = 35 dakika)" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 80px; text-align: center; font-size: 14px; font-weight: bold;">
+        <button id="setDangerTime" class="btn" style="margin: 0; background: #3498db; white-space: nowrap;">⚙️ Set Time</button>
+      </div>
+
+      <!-- VTS Auto Update Section -->
+      <div style="margin-top: 10px; padding: 10px; background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%); border-radius: 4px;">
+        <button id="runVtsUpdateBtn" class="btn" style="margin: 0; width: 100%; background: white; color: #00b09b; font-weight: bold; border: 2px solid #00b09b;">
+          🚍 VTS'den Onay Zamanlarını Getir
+        </button>
+        <div id="vtsStatus" style="margin-top: 8px; padding: 8px; background: rgba(255,255,255,0.9); border-radius: 4px; font-size: 12px; display: none;"></div>
+      </div>
+      
+      <button id="applyHatSelection" class="btn" style="margin-top: 10px; width: 100%;">⏱️ Seçili Hatları Takip Et</button>
+      <button id="refreshHatsBtn" class="btn" style="margin-top: 10px; width: 100%; background: #e74c3c;">🔄 Hatları Yenile</button>
+      <button id="inceleAciklamaBtn" class="btn" style="margin-top: 10px; width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">📝 Açıklamaları İncele</button>
+    </div>
+    </div>
+
+    <div id="status" class="info">Veriler hazırlanıyor...</div>
+    <div class="table-wrap" style="margin-top:12px;">
+    <table id="dataTable" aria-describedby="status">
+    <thead>
+    <tr id="theadRow"><th>Yükleniyor...</th></tr>
+    </thead>
+    <tbody id="tbody">
+    <tr><td class="small">Henüz veri yok.</td></tr>
+    </tbody>
+    </table>
+    </div>
+    <div id="meta" class="info" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- Scroll Butonları -->
+<div class="scroll-buttons">
+  <button class="scroll-btn" id="scrollToTopBtn" title="En Yukarıya Çık">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="18 15 12 9 6 15"></polyline>
+    </svg>
+  </button>
+  <button class="scroll-btn" id="scrollToTimerRowBtn" title="Timer Satırına Git">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <polyline points="12 6 12 12 16 14"></polyline>
+    </svg>
+  </button>
+</div>
+
+<!-- Add User Modal -->
+<div id="addUserModal" class="modal" style="display: none;">
+  <div class="modal-content" style="max-width: 550px; padding: 30px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+    <div style="text-align: center; margin-bottom: 25px;">
+      <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; font-size: 28px;">👤</div>
+      <h2 id="addUserModalTitle" style="margin: 0; font-size: 24px; color: #2c3e50;">👥 Kullanıcı Yönetimi</h2>
+      <p style="margin: 5px 0 0 0; font-size: 14px; color: #7f8c8d;">Kullanıcı ekle, sil veya güncelle</p>
+    </div>
+    
+    <!-- İşlem Seçimi -->
+    <div class="form-group" style="margin-bottom: 20px;">
+      <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">⚙️ İşlem Seçin</label>
+      <div style="display: flex; gap: 10px;">
+        <button id="addUserModeBtn" class="btn" style="flex: 1; padding: 10px; background: #27ae60; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold;">➕ Ekle</button>
+        <button id="updateUserModeBtn" class="btn" style="flex: 1; padding: 10px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold;">✏️ Güncelle</button>
+        <button id="deleteUserModeBtn" class="btn" style="flex: 1; padding: 10px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold;">🗑️ Sil</button>
+        <button id="listUserModeBtn" class="btn" style="flex: 1; padding: 10px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold;">📋 Listele</button>
+      </div>
+    </div>
+    
+    <!-- Görev Filtresi (Tüm modlar için) -->
+    <div class="form-group" style="margin-bottom: 20px;">
+      <label for="filterGorev" style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">💼 Görev Filtresi</label>
+      <select id="filterGorev" class="input-field" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; background: white; cursor: pointer;">
+        <option value="">Tümü</option>
+        <option value="Admin">Admin</option>
+        <option value="Operasyon">Operasyon</option>
+        <option value="Rotasyon">Rotasyon</option>
+        <option value="Depolama">Depolama</option>
+        <option value="Otobüs_Şoförü">Otobüs Şoförü</option>
+        <option value="User">User</option>
+      </select>
+    </div>
+    
+    <!-- Kullanıcı Listesi (Sadece liste modunda görünür) -->
+    <div id="userListContainer" style="display: none; margin-bottom: 20px;">
+      <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #f9f9f9;">
+        <div id="userListContent"></div>
+      </div>
+    </div>
+    
+    <!-- Mevcut Kullanıcılar Dropdown (Güncelle/Sil modunda) -->
+    <div id="existingUserDropdown" class="form-group" style="display: none; margin-bottom: 20px;">
+      <label for="existingUserSelect" style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">👤 Kullanıcı Seçin</label>
+      <select id="existingUserSelect" class="input-field" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; background: white; cursor: pointer;">
+        <option value="">-- Kullanıcı Seçin --</option>
+      </select>
+    </div>
+    
+    <div id="addUserFormContainer">
+    <div class="form-group" style="margin-bottom: 20px;">
+      <label for="newUsername" style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">👤 Kullanıcı Adı *</label>
+      <input type="text" id="newUsername" class="input-field" placeholder="Kullanıcı adı girin" required style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; transition: border-color 0.3s;" onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e0e0e0'">
+    </div>
+    
+    <div class="form-group" style="margin-bottom: 20px;">
+      <label for="newPassword" style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">🔒 Şifre *</label>
+      <input type="password" id="newPassword" class="input-field" placeholder="Şifre girin" required style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; transition: border-color 0.3s;" onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e0e0e0'">
+    </div>
+    
+    <div id="gorevGroup" class="form-group" style="margin-bottom: 20px;">
+      <label for="newGorev" style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">💼 Görev *</label>
+      <select id="newGorev" class="input-field" required style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; background: white; cursor: pointer;">
+        <option value="">-- Görev Seçin --</option>
+        <option value="Admin">Admin</option>
+        <option value="Operasyon">Operasyon</option>
+        <option value="Rotasyon">Rotasyon</option>
+        <option value="Depolama">Depolama</option>
+        <option value="Otobüs_Şoförü">Otobüs Şoförü</option>
+        <option value="User">User</option>
+      </select>
+    </div>
+    </div>
+    
+    <div id="addUserStatus" class="info" style="display: none; margin-top: 15px; padding: 12px; border-radius: 8px; font-size: 14px;"></div>
+    
+    <div style="display: flex; gap: 12px; margin-top: 25px;">
+      <button id="cancelAddUser" class="btn" style="flex: 1; padding: 12px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='#7f8c8d'" onmouseout="this.style.background='#95a5a6'">❌ İptal</button>
+      <button id="confirmAddUser" class="btn" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">✅ Kullanıcı Ekle</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div id="changePasswordModal" class="modal" style="display: none;">
+  <div class="modal-content" style="max-width: 450px; padding: 30px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+    <div style="text-align: center; margin-bottom: 25px;">
+      <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; font-size: 28px;">🔑</div>
+      <h2 style="margin: 0; font-size: 24px; color: #2c3e50;">🔒 Şifre Değiştir</h2>
+      <p style="margin: 5px 0 0 0; font-size: 14px; color: #7f8c8d;">Şifrenizi güncelleyin</p>
+    </div>
+    
+    <div class="form-group" style="margin-bottom: 20px;">
+      <label for="changePasswordOld" style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">🔒 Mevcut Şifre *</label>
+      <div style="position: relative;">
+        <input type="password" id="changePasswordOld" class="input-field" placeholder="Mevcut şifrenizi girin" required style="width: 100%; padding: 12px 45px 12px 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; transition: border-color 0.3s;" onfocus="this.style.borderColor='#e67e22'" onblur="this.style.borderColor='#e0e0e0'">
+        <span onclick="togglePasswordVisibility('changePasswordOld', this)" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 18px; user-select: none;">👁️</span>
+      </div>
+    </div>
+    
+    <div class="form-group" style="margin-bottom: 20px;">
+      <label for="changePasswordNew" style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">🔒 Yeni Şifre *</label>
+      <div style="position: relative;">
+        <input type="password" id="changePasswordNew" class="input-field" placeholder="Yeni şifre girin" required style="width: 100%; padding: 12px 45px 12px 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; transition: border-color 0.3s;" onfocus="this.style.borderColor='#e67e22'" onblur="this.style.borderColor='#e0e0e0'">
+        <span onclick="togglePasswordVisibility('changePasswordNew', this)" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 18px; user-select: none;">👁️</span>
+      </div>
+    </div>
+    
+    <div class="form-group" style="margin-bottom: 20px;">
+      <label for="changePasswordConfirm" style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">🔒 Şifre Tekrar *</label>
+      <div style="position: relative;">
+        <input type="password" id="changePasswordConfirm" class="input-field" placeholder="Şifreyi tekrar girin" required style="width: 100%; padding: 12px 45px 12px 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; transition: border-color 0.3s;" onfocus="this.style.borderColor='#e67e22'" onblur="this.style.borderColor='#e0e0e0'">
+        <span onclick="togglePasswordVisibility('changePasswordConfirm', this)" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 18px; user-select: none;">👁️</span>
+      </div>
+    </div>
+    
+    <div id="changePasswordStatus" class="info" style="display: none; margin-top: 15px; padding: 12px; border-radius: 8px; font-size: 14px;"></div>
+    
+    <div style="display: flex; gap: 12px; margin-top: 25px;">
+      <button id="cancelChangePassword" class="btn" style="flex: 1; padding: 12px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='#7f8c8d'" onmouseout="this.style.background='#95a5a6'">❌ İptal</button>
+      <button id="confirmChangePassword" class="btn" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">✅ Şifre Değiştir</button>
+    </div>
+  </div>
+</div>
+
+<!-- Açıklama Ekleme Modal -->
+<div id="aciklamaModal" class="modal" style="display: none;">
+  <div class="modal-content" style="max-width: 600px; padding: 30px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+    <div style="text-align: center; margin-bottom: 25px;">
+      <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; font-size: 28px;">📝</div>
+      <h2 style="margin: 0; font-size: 24px; color: #2c3e50;">📋 Açıklama Ekle</h2>
+      <p style="margin: 5px 0 0 0; font-size: 14px; color: #7f8c8d;">Seçili satır için açıklama girin</p>
+    </div>
+    
+    <!-- Satır Bilgileri -->
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 13px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div><strong>Hat:</strong> <span id="aciklamaHatAdi"></span></div>
+        <div><strong>Çalışma Zamanı:</strong> <span id="aciklamaCalismaZamani"></span></div>
+        <div><strong>Tarife:</strong> <span id="aciklamaTarife"></span></div>
+        <div><strong>Tarife Saati:</strong> <span id="aciklamaTarifeSaati"></span></div>
+        <div style="grid-column: 1 / -1;"><strong>Plaka:</strong> <span id="aciklamaPlaka"></span></div>
+      </div>
+    </div>
+    
+    <div class="form-group" style="margin-bottom: 20px;">
+      <label for="aciklamaText" style="display: block; margin-bottom: 8px; font-weight: bold; color: #2c3e50; font-size: 14px;">📝 Açıklama *</label>
+      <textarea id="aciklamaText" class="input-field" placeholder="Açıklama yazın..." required style="width: 100%; min-height: 150px; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; resize: vertical; font-family: Arial, sans-serif; transition: border-color 0.3s;" onfocus="this.style.borderColor='#3498db'" onblur="this.style.borderColor='#e0e0e0'"></textarea>
+    </div>
+    
+    <div id="aciklamaStatus" class="info" style="display: none; margin-top: 15px; padding: 12px; border-radius: 8px; font-size: 14px;"></div>
+    
+    <div style="display: flex; gap: 12px; margin-top: 25px;">
+      <button id="cancelAciklama" class="btn" style="flex: 1; padding: 12px; background: #95a5a6; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; transition: background 0.3s;" onmouseover="this.style.background='#7f8c8d'" onmouseout="this.style.background='#95a5a6'">❌ İptal</button>
+      <button id="confirmAciklama" class="btn" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">✅ Açıklama Ekle</button>
+    </div>
+  </div>
+</div>
+
+<!-- External Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<script src="/app.js"></script>
+</body>
+</html>
